@@ -1,97 +1,145 @@
-#include "shell.h"
-
+#include "main.h"
 /**
- * _myexit - exits the shell
- * @info: Structure containing potential arguments. Used to maintain
- *          constant function prototype.
- *  Return: exits with a given exit status
- *         (0) if info.argv[0] != "exit"
+ * bltn_chck - checks for supported builtin
+ * @buff: user's command entry
+ * Return: the builtin function to execute if found
  */
-int _myexit(info_t *info)
+int (*bltn_chck(char *buff))(char *buffer, alloclist_t **head, path_t **path)
 {
-	int exitcheck;
+	builtin_t builtin_list[] = {
+		{"cd", cd_handler},
+		{"unsetenv", unsetenv_handler},
+		{"setenv", setenv_handler},
+		{"exit", exit_handler},
+		{"env", env_handler},
+		{NULL, NULL}
+	};
+	int i = 0;
 
-	if (info->argv[1])  /* If there is an exit arguement */
+	if (space_check(buff))
+		return (emptycmd_handler);
+	while (i < 5)
 	{
-		exitcheck = _erratoi(info->argv[1]);
-		if (exitcheck == -1)
-		{
-			info->status = 2;
-			print_error(info, "Illegal number: ");
-			_eputs(info->argv[1]);
-			_eputchar('\n');
-			return (1);
-		}
-		info->err_num = _erratoi(info->argv[1]);
-		return (-2);
+		if (str_cmp(buff, builtin_list[i].cmdname))
+			return (builtin_list[i].func);
+		i++;
 	}
-	info->err_num = -1;
-	return (-2);
+	return (NULL);
 }
-
 /**
- * _mycd - changes the current directory of the process
- * @info: Structure containing potential arguments. Used to maintain
- *          constant function prototype.
- *  Return: Always 0
+ * exit_handler - handles exit
+ * with argument and without argument
+ * @head: head of the alloclist
+ * @buffer: the user input
+ * @path: the head of the pathlist
+ * Return: return (void)
  */
-int _mycd(info_t *info)
+int exit_handler(char *buffer, alloclist_t **head, path_t **path)
 {
-	char *s, *dir, buffer[1024];
-	int chdir_ret;
+	char **command, *err;
+	int status = 0, check = 0, wordc;
 
-	s = getcwd(buffer, 1024);
-	if (!s)
-		_puts("TODO: >>getcwd failure emsg here<<\n");
-	if (!info->argv[1])
+	wordc = word_count(buffer);
+	command = tokenizer(buffer);
+	if (command[1] == NULL)
 	{
-		dir = _getenv(info, "HOME=");
-		if (!dir)
-			chdir_ret = /* TODO: what should this be? */
-				chdir((dir = _getenv(info, "PWD=")) ? dir : "/");
+		free_memory(command, wordc);
+		ultimate_free(path, head, buffer);
+		exit(status);
+	}
+	else
+	{
+
+		check = alpha_check(command[1]);
+		if (check)
+		{
+			err = _getenv("_");
+			exit_arg_err(err, command, 0);
+			free_memory(command, wordc);
+		}
 		else
-			chdir_ret = chdir(dir);
-	}
-	else if (_strcmp(info->argv[1], "-") == 0)
-	{
-		if (!_getenv(info, "OLDPWD="))
 		{
-			_puts(s);
-			_putchar('\n');
-			return (1);
+		status = _atoi(command[1]);
+		free_memory(command, wordc);
+		ultimate_free(path, head, buffer);
+		exit(status);
 		}
-		_puts(_getenv(info, "OLDPWD=")), _putchar('\n');
-		chdir_ret = /* TODO: what should this be? */
-			chdir((dir = _getenv(info, "OLDPWD=")) ? dir : "/");
 	}
-	else
-		chdir_ret = chdir(info->argv[1]);
-	if (chdir_ret == -1)
-	{
-		print_error(info, "can't cd to ");
-		_eputs(info->argv[1]), _eputchar('\n');
-	}
-	else
-	{
-		_setenv(info, "OLDPWD", _getenv(info, "PWD="));
-		_setenv(info, "PWD", getcwd(buffer, 1024));
-	}
-	return (0);
+	return (-1);
 }
-
 /**
- * _myhelp - changes the current directory of the process
- * @info: Structure containing potential arguments. Used to maintain
- *          constant function prototype.
- *  Return: Always 0
+ * _atoi - converts a string to integer
+ * @s: string to be converted
+ * Return: the equivalent integer to s
  */
-int _myhelp(info_t *info)
-{
-	char **arg_array;
 
-	arg_array = info->argv;
-	_puts("help call works. Function not yet implemented \n");
-	if (0)
-		_puts(*arg_array); /* temp att_unused workaround */
-	return (0);
+int _atoi(char *s)
+{
+	bool isnegative = false, hasnumbers = false;
+	unsigned int i, integer = 0;
+
+	for (i = 0; i < (unsigned int)__strlen(s); i++)
+	{
+		if (s[i] == '-')
+		{
+			if (!isnegative)
+				isnegative = true;
+			else
+				isnegative = false;
+		}
+		while (s[i] >= 48 && s[i] <= 57)
+		{
+			hasnumbers = true;
+			integer = integer * 10 + (s[i] - 48);
+			i++;
+		}
+		if (hasnumbers)
+			break;
+	}
+	if (!hasnumbers)
+		return (0);
+
+	else
+	{
+		if (isnegative)
+			return (integer * (-1));
+		else
+			return (integer);
+	}
+}
+/**
+ * env_handler - handles printing the environment
+ * @buffer: buffer
+ * @head: head of the allocation list
+ * @path: the head of the pathlist
+ * Return: (1)
+ */
+int env_handler(char *buffer, alloclist_t **head, path_t **path)
+{
+	int i = 0;
+
+	head = (alloclist_t **) head;
+	buffer = (char *) buffer;
+	path = (path_t **) path;
+	while (*(environ + i) != NULL)
+	{
+		write(1, environ[i], __strlen(environ[i]));
+		write(1, "\n", 1);
+		i++;
+	}
+	return (-1);
+}
+/**
+ * emptycmd_handler - handles the newline character
+ * @buffer: the buffer
+ * @head: head of the allocation list
+ * @path: head of the pathlist
+ * Return: (1)
+ */
+int emptycmd_handler(char *buffer, alloclist_t **head, path_t **path)
+{
+	head = (alloclist_t **) head;
+	buffer = (char *) buffer;
+	path = (path_t **) path;
+	return (-1);
 }
